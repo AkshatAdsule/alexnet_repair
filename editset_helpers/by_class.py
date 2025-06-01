@@ -11,7 +11,6 @@ import json
 import torch
 import torch.nn.functional as F
 from helpers.cifar import get_cifar10_dataloader
-from models.alexnet import alexnet
 
 
 def create_by_class_editset(

@@ -1,8 +1,5 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-import torchvision
-from torchvision import datasets, transforms
 
 from helpers.cifar import get_cifar10_dataloader
 from models.alexnet import alexnet

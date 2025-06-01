@@ -44,8 +44,8 @@ def generate_misclassified(args):
         return False
 
     # Check if repair set already exists
-    dataset_path = f"data/edit_sets/misclassified_edit_dataset.pt"
-    metadata_path = f"data/edit_sets/misclassified_edit_metadata.json"
+    dataset_path = "data/edit_sets/misclassified_edit_dataset.pt"
+    metadata_path = "data/edit_sets/misclassified_edit_metadata.json"
 
     if (
         os.path.exists(dataset_path)
@@ -267,7 +267,7 @@ CIFAR-10 Classes:
     )
 
     # List command
-    list_parser = subparsers.add_parser("list", help="List existing edit sets")
+    subparsers.add_parser("list", help="List existing edit sets")
 
     args = parser.parse_args()
 

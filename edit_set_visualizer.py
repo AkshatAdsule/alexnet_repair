@@ -7,7 +7,6 @@ containing misclassified images from SqueezeNet on ImageNet-mini.
 import os
 import json
 import torch
-import numpy as np
 import matplotlib
 
 matplotlib.use("Agg")  # Use non-interactive backend
@@ -20,8 +19,8 @@ try:
     HAS_SEABORN = True
 except ImportError:
     HAS_SEABORN = False
-from collections import Counter, defaultdict
-from flask import Flask, render_template, send_file, jsonify, request
+from collections import Counter
+from flask import Flask, render_template, jsonify, request
 from torchvision import transforms
 import io
 import base64

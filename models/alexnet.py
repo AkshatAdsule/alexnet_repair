@@ -37,7 +37,7 @@ class AlexNet(nn.Module):
         x = self.avgpool(x)
         x = x.view(x.size(0), 256 * 6 * 6)
         logits = self.classifier(x)
-        probas = F.softmax(logits, dim=1)
+        F.softmax(logits, dim=1)
         return logits
 
 
