@@ -11,7 +11,7 @@ import sys
 import os
 import argparse
 import torch
-from models.alexnet import alexnet
+from models import alexnet
 from editset_helpers.missclassified import create_misclassified_editset
 from editset_helpers.by_class import create_by_class_editset
 

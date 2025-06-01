@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -39,11 +38,3 @@ class AlexNet(nn.Module):
         logits = self.classifier(x)
         F.softmax(logits, dim=1)
         return logits
-
-
-def alexnet(state_dict_path=None):
-    model = AlexNet(num_classes=10)
-    if state_dict_path:
-        state_dict = torch.load(state_dict_path, map_location="cpu")
-        model.load_state_dict(state_dict)
-    return model
