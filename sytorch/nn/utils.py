@@ -1,4 +1,6 @@
 import pathlib
+
+from model_classes.alexnet import AlexNet
 from .modules import *
 import torch
 import numpy as np
@@ -12,23 +14,22 @@ __all__ = [
     "from_nnet",
     "to_onnx",
     "from_eran",
-    'from_eran_pyt',
-    'to_syrenn',
-    'syrenn',
+    "from_eran_pyt",
+    "to_syrenn",
+    "syrenn",
 ]
+
 
 def to_syrenn(net):
     import pysyrenn
 
     if isinstance(net, Sequential):
-        return pysyrenn.frontend.Network([
-            to_syrenn(module) for module in net
-        ])
+        return pysyrenn.frontend.Network([to_syrenn(module) for module in net])
 
     elif isinstance(net, Linear):
         return pysyrenn.frontend.FullyConnectedLayer(
-            weights = net.weight.detach().cpu().numpy().T,
-            biases  = net.bias.detach().cpu().numpy()
+            weights=net.weight.detach().cpu().numpy().T,
+            biases=net.bias.detach().cpu().numpy(),
         )
 
     elif isinstance(net, ReLU):
@@ -36,14 +37,13 @@ def to_syrenn(net):
 
     elif isinstance(net, NormalizeInput):
         return pysyrenn.frontend.NormalizeLayer(
-            means = net.mean.detach().cpu().numpy(),
-            standard_deviations = net.std.detach().cpu().numpy()
+            means=net.mean.detach().cpu().numpy(),
+            standard_deviations=net.std.detach().cpu().numpy(),
         )
 
     else:
-        raise NotImplementedError(
-            f"unimplemented .to_syrenn(...) for {type(net)}."
-        )
+        raise NotImplementedError(f"unimplemented .to_syrenn(...) for {type(net)}.")
+
 
 def syrenn(net, polytopes, preimages=True, raw=False):
     import pysyrenn
@@ -57,7 +57,7 @@ def syrenn(net, polytopes, preimages=True, raw=False):
     #     )
 
     if len(polytopes.shape) == 2:
-        polytopes = polytopes[None,...]
+        polytopes = polytopes[None, ...]
 
     if len(polytopes.shape) != 3:
         raise RuntimeError(
@@ -65,9 +65,9 @@ def syrenn(net, polytopes, preimages=True, raw=False):
         )
 
     classifier = pysyrenn.PlanesClassifier(
-        network   = to_syrenn(net),
-        planes    = polytopes,
-        preimages = preimages,
+        network=to_syrenn(net),
+        planes=polytopes,
+        preimages=preimages,
     )
 
     classifier.partial_compute()
@@ -75,10 +75,8 @@ def syrenn(net, polytopes, preimages=True, raw=False):
     """ list of (pre, post) """
     if raw:
         return [
-            [
-                (torch.from_numpy(pre), torch.from_numpy(post))
-                for pre, post in polytopes
-            ] for polytopes in classifier.transformed_planes
+            [(torch.from_numpy(pre), torch.from_numpy(post)) for pre, post in polytopes]
+            for polytopes in classifier.transformed_planes
         ]
 
     else:
@@ -94,6 +92,7 @@ def syrenn(net, polytopes, preimages=True, raw=False):
             posts.append(poly_post)
         return pres, posts
 
+
 def _parse_np_array_as_tensor(serialized):
     """Given a string, returns a Numpy array of its contents.
 
@@ -104,25 +103,27 @@ def _parse_np_array_as_tensor(serialized):
     # Helper to read directly from a file.
     return _parse_np_array_as_tensor(serialized.readline()[:-1].strip())
 
+
 def from_file(path: str, file_type=None):
-        """Loads a network from an ONNX or ERAN file format.
+    """Loads a network from an ONNX or ERAN file format.
 
-        Files ending in .onnx will be loaded as ONNX files, ones ending in
-        .eran will be loaded as ERAN files. Pass file_tye="{eran, onnx}" to
-        override this behavior.
-        """
-        if file_type is None:
-            file_type = path.split(".")[-1]
-        file_type = file_type.lower()
+    Files ending in .onnx will be loaded as ONNX files, ones ending in
+    .eran will be loaded as ERAN files. Pass file_tye="{eran, onnx}" to
+    override this behavior.
+    """
+    if file_type is None:
+        file_type = path.split(".")[-1]
+    file_type = file_type.lower()
 
-        if file_type in ("eran", "tf"):
-            return from_eran(path)
-        elif file_type == "onnx":
-            return from_onnx(path)
-        elif file_type == "nnet":
-            return from_nnet(path)
+    if file_type in ("eran", "tf"):
+        return from_eran(path)
+    elif file_type == "onnx":
+        return from_onnx(path)
+    elif file_type == "nnet":
+        return from_nnet(path)
 
-        raise NotImplementedError
+    raise NotImplementedError
+
 
 def from_eran(path):
     """
@@ -152,14 +153,13 @@ def from_eran(path):
             prev_line = curr_line
             curr_line = net_file.readline()[:-1]
             if curr_line in {"Affine", "ReLU", "HardTanh"}:
-
                 if prev_line == "MaxPooling2D":
                     # Make sure to add a flattening operation, so the dimensions match
                     layer = Flatten(start_dim=1)
                     layers.append(layer)
 
                 weight = _parse_np_array_as_tensor(net_file)
-                bias   = _parse_np_array_as_tensor(net_file)
+                bias = _parse_np_array_as_tensor(net_file)
 
                 # Add the fully-connected layer.
                 layer = Linear(weight.shape[1], weight.shape[0])
@@ -171,15 +171,12 @@ def from_eran(path):
                 if curr_line == "ReLU":
                     layers.append(ReLU())
                 else:
-                    raise NotImplementedError(
-                        f"unimplemented {curr_line}"
-                    )
+                    raise NotImplementedError(f"unimplemented {curr_line}")
 
             elif curr_line.strip() == "":
                 break
 
             elif curr_line.startswith("Conv2D"):
-
                 info_line = net_file.readline()[:-1].strip()
                 activation = info_line.split(",")[0]
 
@@ -188,9 +185,10 @@ def from_eran(path):
 
                 if "stride=" in info_line:
                     stride = _parse_np_array_as_tensor(
-                        info_line.split("stride=")[1].split("],")[0] + "]")
+                        info_line.split("stride=")[1].split("],")[0] + "]"
+                    )
                 else:
-                    stride = 1 # Default.
+                    stride = 1  # Default.
 
                 pad = (0, 0)
                 if "padding=" in info_line:
@@ -199,7 +197,9 @@ def from_eran(path):
 
                 # (f_h, f_w, i_c, o_c)
                 filter_weights = _parse_np_array_as_tensor(net_file)
-                filter_weights = filter_weights.permute(3, 2, 0, 1).float() # (o_c, i_c, f_h, f_w) (torch style)
+                filter_weights = filter_weights.permute(
+                    3, 2, 0, 1
+                ).float()  # (o_c, i_c, f_h, f_w) (torch style)
                 # (o_c,)
                 biases = _parse_np_array_as_tensor(net_file).float()
 
@@ -207,23 +207,29 @@ def from_eran(path):
                 out_channels = filter_weights.shape[0]
                 kernel_size = filter_weights.shape[2:]
 
-                layer = Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size)
+                layer = Conv2d(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    kernel_size=kernel_size,
+                )
                 layer.weight.data = filter_weights
                 layer.bias.data = biases
                 layers.append(layer)
 
-                if activation == 'ReLU':
+                if activation == "ReLU":
                     layers.append(ReLU())
                 else:
                     raise NotImplementedError
 
-            elif curr_line.startswith('MaxPooling2D'):
+            elif curr_line.startswith("MaxPooling2D"):
                 info_line = net_file.readline()[:-1].strip()
 
                 if "stride=" in info_line:
-                    stride = _parse_np_array_as_tensor(info_line.split("stride=")[1].split("],")[0] + "]")
+                    stride = _parse_np_array_as_tensor(
+                        info_line.split("stride=")[1].split("],")[0] + "]"
+                    )
                 else:
-                    stride = None # default.
+                    stride = None  # default.
 
                 if "padding=" in info_line:
                     pad = int(info_line.split("padding=")[1])
@@ -232,17 +238,20 @@ def from_eran(path):
                     pad = 0
 
                 # tuple(_parse_np_array_as_tensor(info_line.split("pool_size=")[1].split("],")[0] + "]"))
-                kernel_size = tuple(ast.literal_eval(info_line.split("pool_size=")[1].split("],")[0] + "]"))
+                kernel_size = tuple(
+                    ast.literal_eval(
+                        info_line.split("pool_size=")[1].split("],")[0] + "]"
+                    )
+                )
 
                 layer = MaxPool2d(kernel_size=kernel_size, stride=stride, padding=pad)
                 layers.append(layer)
 
             else:
-                raise NotImplementedError(
-                    f"unimplemented {curr_line.split(' ')[0]}"
-                )
+                raise NotImplementedError(f"unimplemented {curr_line.split(' ')[0]}")
 
     return Sequential(*layers)
+
 
 def _copy_from_torch_paramater(param):
     if param is None:
@@ -255,12 +264,11 @@ def _copy_from_torch_paramater(param):
         return param.detach().clone()
 
     else:
-        raise NotImplementedError(
-            f"unimplemented copy from {type(param)}."
-        )
+        raise NotImplementedError(f"unimplemented copy from {type(param)}.")
+
 
 def from_torch(module: torch.nn.Module):
-    """ Helper function to convert a torch.nn.Module to a symbolic sytorch.nn.Module """
+    """Helper function to convert a torch.nn.Module to a symbolic sytorch.nn.Module"""
     import torchvision
 
     if isinstance(module, torch.nn.Identity):
@@ -268,52 +276,48 @@ def from_torch(module: torch.nn.Module):
 
     elif isinstance(module, torch.nn.Linear):
         out = Linear(
-            in_features  = module.in_features,
-            out_features = module.out_features,
-            bias         = module.bias is not None
+            in_features=module.in_features,
+            out_features=module.out_features,
+            bias=module.bias is not None,
         )
         out.weight = _copy_from_torch_paramater(module.weight)
-        out.bias   = _copy_from_torch_paramater(module.bias)
+        out.bias = _copy_from_torch_paramater(module.bias)
         return out
 
     elif isinstance(module, torch.nn.Conv2d):
         out = Conv2d(
-            in_channels  = module.in_channels,
-            out_channels = module.out_channels,
-            kernel_size  = module.kernel_size,
-            stride       = module.stride,
-            padding      = module.padding,
-            dilation     = module.dilation,
-            groups       = module.groups,
-            bias         = module.bias is not None,
-            padding_mode = module.padding_mode)
+            in_channels=module.in_channels,
+            out_channels=module.out_channels,
+            kernel_size=module.kernel_size,
+            stride=module.stride,
+            padding=module.padding,
+            dilation=module.dilation,
+            groups=module.groups,
+            bias=module.bias is not None,
+            padding_mode=module.padding_mode,
+        )
         out.weight = _copy_from_torch_paramater(module.weight)
-        out.bias   = _copy_from_torch_paramater(module.bias)
+        out.bias = _copy_from_torch_paramater(module.bias)
         return out
 
     elif isinstance(module, torch.nn.ReLU):
-        return ReLU(inplace = module.inplace)
+        return ReLU(inplace=module.inplace)
 
     elif isinstance(module, torch.nn.Dropout):
-        return Dropout(
-            p       = module.p,
-            inplace = module.inplace
-        )
+        return Dropout(p=module.p, inplace=module.inplace)
 
     elif isinstance(module, torch.nn.MaxPool2d):
         return MaxPool2d(
-            kernel_size    = module.kernel_size,
-            stride         = module.stride,
-            padding        = module.padding,
-            dilation       = module.dilation,
-            return_indices = module.return_indices,
-            ceil_mode      = module.ceil_mode,
+            kernel_size=module.kernel_size,
+            stride=module.stride,
+            padding=module.padding,
+            dilation=module.dilation,
+            return_indices=module.return_indices,
+            ceil_mode=module.ceil_mode,
         )
 
     elif isinstance(module, torch.nn.AdaptiveAvgPool2d):
-        return AdaptiveAvgPool2d(
-            output_size = module.output_size
-        )
+        return AdaptiveAvgPool2d(output_size=module.output_size)
 
     elif isinstance(module, torch.nn.BatchNorm2d):
         # return module
@@ -325,16 +329,14 @@ def from_torch(module: torch.nn.Module):
             track_running_stats=module.track_running_stats,
         )
         out.weight = _copy_from_torch_paramater(module.weight)
-        out.bias   = _copy_from_torch_paramater(module.bias)
+        out.bias = _copy_from_torch_paramater(module.bias)
         out.running_mean = _copy_from_torch_paramater(module.running_mean)
-        out.running_var  = _copy_from_torch_paramater(module.running_var)
+        out.running_var = _copy_from_torch_paramater(module.running_var)
         out.num_batches_tracked = _copy_from_torch_paramater(module.num_batches_tracked)
         return out
 
     elif isinstance(module, torch.nn.Sequential):
-        return Sequential(
-            *(from_torch(layer) for layer in module)
-        )
+        return Sequential(*(from_torch(layer) for layer in module))
 
     elif isinstance(module, torchvision.models.squeezenet.Fire):
         return Sequential(
@@ -343,22 +345,29 @@ def from_torch(module: torch.nn.Module):
             Parallel(
                 Sequential(
                     from_torch(module.expand1x1),
-                    from_torch(module.expand1x1_activation)
+                    from_torch(module.expand1x1_activation),
                 ),
                 Sequential(
                     from_torch(module.expand3x3),
-                    from_torch(module.expand3x3_activation)
+                    from_torch(module.expand3x3_activation),
                 ),
-                mode = 'cat',
-                dim  = 1,
-            )
+                mode="cat",
+                dim=1,
+            ),
         )
 
     elif isinstance(module, torchvision.models.squeezenet.SqueezeNet):
         return Sequential(
             from_torch(module.features),
             from_torch(module.classifier),
-            Flatten(start_dim=1)
+            Flatten(start_dim=1),
+        )
+    elif isinstance(module, AlexNet):
+        return Sequential(
+            from_torch(module.features),
+            from_torch(module.avgpool),
+            Flatten(start_dim=1),
+            from_torch(module.classifier),
         )
 
     # Handle `torchvision.models.vgg.VGG`.
@@ -367,7 +376,7 @@ def from_torch(module: torch.nn.Module):
             from_torch(module.features),
             from_torch(module.avgpool),
             Flatten(start_dim=1),
-            from_torch(module.classifier)
+            from_torch(module.classifier),
         )
 
     # Handle `torchvision.models.resnet.ResNet`.
@@ -378,12 +387,13 @@ def from_torch(module: torch.nn.Module):
                     from_torch(module.conv1),
                     from_torch(module.bn1),
                     from_torch(module.relu),
-
                     from_torch(module.conv2),
                     from_torch(module.bn2),
                 ),
-                from_torch(module.downsample) if module.downsample is not None else Identity(),
-                mode = 'add'
+                from_torch(module.downsample)
+                if module.downsample is not None
+                else Identity(),
+                mode="add",
             ),
             ReLU(),
         )
@@ -395,16 +405,16 @@ def from_torch(module: torch.nn.Module):
                     from_torch(module.conv1),
                     from_torch(module.bn1),
                     from_torch(module.relu),
-
                     from_torch(module.conv2),
                     from_torch(module.bn2),
                     from_torch(module.relu),
-
                     from_torch(module.conv3),
                     from_torch(module.bn3),
                 ),
-                from_torch(module.downsample) if module.downsample is not None else Identity(),
-                mode = 'add'
+                from_torch(module.downsample)
+                if module.downsample is not None
+                else Identity(),
+                mode="add",
             ),
             ReLU(),
         )
@@ -414,21 +424,17 @@ def from_torch(module: torch.nn.Module):
             from_torch(module.bn1),
             from_torch(module.relu),
             from_torch(module.maxpool),
-
             from_torch(module.layer1),
             from_torch(module.layer2),
             from_torch(module.layer3),
             from_torch(module.layer4),
-
             from_torch(module.avgpool),
             Flatten(start_dim=1),
-            from_torch(module.fc)
+            from_torch(module.fc),
         )
 
     else:
-        raise NotImplementedError(
-            f"unsupported torch module {module}."
-        )
+        raise NotImplementedError(f"unsupported torch module {module}.")
 
 
 def from_onnx(path, skip_until=None):
@@ -449,16 +455,17 @@ def from_onnx(path, skip_until=None):
 
     skipping = skip_until is not None
     start_index = 0
-    if model.graph.node[0].op_type == 'Constant':
-        assert model.graph.node[1].op_type == 'Sub'
-        assert model.graph.node[2].op_type == 'Constant'
-        assert model.graph.node[3].op_type == 'Div'
+    if model.graph.node[0].op_type == "Constant":
+        assert model.graph.node[1].op_type == "Sub"
+        assert model.graph.node[2].op_type == "Constant"
+        assert model.graph.node[3].op_type == "Div"
         import onnx2torch
-        _onet = onnx2torch.convert(model, stop_at='Div_0')
+
+        _onet = onnx2torch.convert(model, stop_at="Div_0")
         layers.append(
             NormalizeInput(
-                mean = getattr(_onet, 'Constant_0').value,
-                std  = getattr(_onet, 'Constant_1').value,
+                mean=getattr(_onet, "Constant_0").value,
+                std=getattr(_onet, "Constant_1").value,
             )
         )
         del _onet
@@ -479,7 +486,9 @@ def from_onnx(path, skip_until=None):
 
     return Sequential(*layers)
 
+
 # ONNX helper functions:
+
 
 def onnx_ints_attribute(node, name):
     """
@@ -488,9 +497,10 @@ def onnx_ints_attribute(node, name):
 
     Reads int attributes (eg. weight shape) from an ONNX node.
     """
-    return next(attribute.ints
-                for attribute in node.attribute
-                if attribute.name == name)
+    return next(
+        attribute.ints for attribute in node.attribute if attribute.name == name
+    )
+
 
 def layer_from_onnx(graph, node):
     """
@@ -514,8 +524,9 @@ def layer_from_onnx(graph, node):
     for input_name in inputs:
         # We need to find the initializers (which I think are basically
         # weight tensors) for the particular input.
-        initializers = [init for init in graph.initializer
-                        if str(init.name) == str(input_name)]
+        initializers = [
+            init for init in graph.initializer if str(init.name) == str(input_name)
+        ]
         if initializers:
             assert len(initializers) == 1
             # Get the weight tensor as a Numpy array and save it.
@@ -526,13 +537,11 @@ def layer_from_onnx(graph, node):
             # squeezenet0_conv0_fwd.
             deserialized_inputs.append(str(input_name))
         # Get metadata about the input (eg. its shape).
-        infos = [info for info in graph.value_info
-                    if info.name == input_name]
+        infos = [info for info in graph.value_info if info.name == input_name]
         if infos:
             # This is an input with a particular shape.
             assert len(infos) == 1
-            input_shape = [d.dim_value
-                            for d in infos[0].type.tensor_type.shape.dim]
+            input_shape = [d.dim_value for d in infos[0].type.tensor_type.shape.dim]
             deserialized_input_shapes.append(input_shape)
         elif input_name == "data":
             # This is an input to the entire network, its handled
@@ -579,7 +588,9 @@ def layer_from_onnx(graph, node):
         pads = tuple(pads)
         # dilation is by default 1
 
-        layer = Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding=pads)
+        layer = Conv2d(
+            in_channels, out_channels, kernel_size, stride=stride, padding=pads
+        )
         layer.weight.data = torch.tensor(filters)
         layer.bias.data = torch.tensor(biases)
     elif node.op_type == "Relu":
@@ -613,7 +624,9 @@ def layer_from_onnx(graph, node):
         if trans_B:
             weights = weights.transpose()
 
-        layer = Linear(weights.shape[1], weights.shape[0]) # IO seems to be reversed between how it's stored in the filter and the IO ordering.
+        layer = Linear(
+            weights.shape[1], weights.shape[0]
+        )  # IO seems to be reversed between how it's stored in the filter and the IO ordering.
         layer.weight.data = torch.tensor(weights)
         layer.bias.data = torch.tensor(biases)
 
@@ -637,8 +650,9 @@ def layer_from_onnx(graph, node):
 https://github.com/sisl/NNet/blob/master/utils/readNNet.py
 """
 
+
 def _readNNet(nnetFile, withNorm=False):
-    '''
+    """
     Read a .nnet file and return list of weight matrices and bias vectors
 
     Inputs:
@@ -648,26 +662,26 @@ def _readNNet(nnetFile, withNorm=False):
     Returns:
         weights: List of weight matrices for fully connected network
         biases: List of bias vectors for fully connected network
-    '''
+    """
 
     # Open NNet file
-    f = open(nnetFile,'r')
+    f = open(nnetFile, "r")
 
     # Skip header lines
     line = f.readline()
-    while line[:2]=="//":
+    while line[:2] == "//":
         line = f.readline()
 
     # Extract information about network architecture
-    record = line.split(',')
-    numLayers   = int(record[0])
-    inputSize   = int(record[1])
+    record = line.split(",")
+    numLayers = int(record[0])
+    inputSize = int(record[1])
 
     line = f.readline()
-    record = line.split(',')
-    layerSizes = np.zeros(numLayers+1,'int')
-    for i in range(numLayers+1):
-        layerSizes[i]=int(record[i])
+    record = line.split(",")
+    layerSizes = np.zeros(numLayers + 1, "int")
+    for i in range(numLayers + 1):
+        layerSizes[i] = int(record[i])
 
     # Skip extra obsolete parameter line
     f.readline()
@@ -686,24 +700,23 @@ def _readNNet(nnetFile, withNorm=False):
     ranges = [float(x) for x in line.strip().split(",") if x]
 
     # Read weights and biases
-    weights= []
+    weights = []
     biases = []
     for layernum in range(numLayers):
-
         previousLayerSize = layerSizes[layernum]
-        currentLayerSize = layerSizes[layernum+1]
+        currentLayerSize = layerSizes[layernum + 1]
         weights.append([])
         biases.append([])
-        weights[layernum] = np.zeros((currentLayerSize,previousLayerSize))
+        weights[layernum] = np.zeros((currentLayerSize, previousLayerSize))
         for i in range(currentLayerSize):
-            line=f.readline()
+            line = f.readline()
             aux = [float(x) for x in line.strip().split(",")[:-1]]
             for j in range(previousLayerSize):
-                weights[layernum][i,j] = aux[j]
-        #biases
+                weights[layernum][i, j] = aux[j]
+        # biases
         biases[layernum] = np.zeros(currentLayerSize)
         for i in range(currentLayerSize):
-            line=f.readline()
+            line = f.readline()
             x = float(line.strip().split(",")[0])
             biases[layernum][i] = x
 
@@ -713,26 +726,28 @@ def _readNNet(nnetFile, withNorm=False):
         return weights, biases, inputMins, inputMaxes, means, ranges
     return weights, biases
 
+
 def from_nnet(path: str):
     weights, biases, mins, maxes, means, stds = _readNNet(path, withNorm=True)
     mins, maxes, means, stds = tuple(np.array(a) for a in (mins, maxes, means, stds))
     means, stds = means[:-1], stds[:-1]
 
     def normalize_input(i):
-        return ((np.clip(i, mins, maxes) - means) / stds)
+        return (np.clip(i, mins, maxes) - means) / stds
 
     def denormalize_input(i):
-        return ((i * stds) + means)
+        return (i * stds) + means
 
     layers = []
     for weight, bias in zip(weights, biases):
         with torch.no_grad():
             fc = Linear(*weight.shape[::-1])
             fc.weight[:] = torch.from_numpy(weight)
-            fc.bias  [:] = torch.from_numpy(bias)
+            fc.bias[:] = torch.from_numpy(bias)
         layers += [fc, ReLU()]
 
     return Sequential(*layers), normalize_input, denormalize_input
+
 
 def _create_sample_input(net, sample_input=None):
     if isinstance(sample_input, tuple):
@@ -741,7 +756,7 @@ def _create_sample_input(net, sample_input=None):
     elif isinstance(sample_input, Tensor):
         return sample_input
 
-    elif hasattr(sample_input, 'shape'):
+    elif hasattr(sample_input, "shape"):
         return torch.zeros(sample_input.shape)
 
     assert sample_input is None
@@ -755,24 +770,25 @@ def _create_sample_input(net, sample_input=None):
             (1, net.weight.shape[1]),
             dtype=ref.dtype,
             device=ref.device,
-            requires_grad=True
+            requires_grad=True,
         )
 
     elif isinstance(net, Conv2d):
         ref = next(net.parameters())
-        warnings.warn(f"assuming MNIST conv network and using onnx input shape (1,1,28,28).")
+        warnings.warn(
+            f"assuming MNIST conv network and using onnx input shape (1,1,28,28)."
+        )
         return torch.randn(
             # This shape is not always correct.
             (1, net.weight.shape[1], 28, 28),
             dtype=ref.dtype,
             device=ref.device,
-            requires_grad=True
+            requires_grad=True,
         )
 
     else:
-        raise NotImplementedError(
-            f"unimplemented sample input create for {type(net)}"
-        )
+        raise NotImplementedError(f"unimplemented sample input create for {type(net)}")
+
 
 def to_onnx(net, sample_input=None, file=None):
     # https://learn.microsoft.com/en-us/windows/ai/windows-ml/tutorials/pytorch-convert-model
@@ -785,6 +801,7 @@ def to_onnx(net, sample_input=None, file=None):
     net = net.to_onnx_compatible()
 
     import io
+
     if file is None:
         file = io.BytesIO()
 
@@ -799,12 +816,14 @@ def to_onnx(net, sample_input=None, file=None):
             sample_input,
             file,
             export_params=True,  # store the trained parameter weights inside the model file
-            opset_version=10,    # the ONNX version to export the model to
+            opset_version=10,  # the ONNX version to export the model to
             do_constant_folding=True,  # whether to execute constant folding for optimization
-            input_names = ['modelInput'],   # the model's input names
-            output_names = ['modelOutput'], # the model's output names
-            dynamic_axes={'modelInput' : {0 : 'batch_size'},    # variable length axes
-                        'modelOutput' : {0 : 'batch_size'}}
+            input_names=["modelInput"],  # the model's input names
+            output_names=["modelOutput"],  # the model's output names
+            dynamic_axes={
+                "modelInput": {0: "batch_size"},  # variable length axes
+                "modelOutput": {0: "batch_size"},
+            },
         )
     finally:
         net.train(training)
@@ -816,30 +835,34 @@ def to_onnx(net, sample_input=None, file=None):
 
     return model
 
-class _with_paths():
+
+class _with_paths:
     def __init__(self, *paths):
         self.paths = paths
 
     def __enter__(self):
         import sys
+
         for path in self.paths:
             sys.path.insert(0, path)
 
     def __exit__(self, exc_type, exc_value, traceback):
         import sys
+
         for path in self.paths:
             try:
                 sys.path.remove(path)
             except ValueError:
                 pass
 
+
 def from_eran_pyt(path):
     import re
 
     def runRepl(arg, repl):
         for a in repl:
-            arg = arg.replace(a+"=", "'"+a+"':")
-        return eval("{"+arg+"}")
+            arg = arg.replace(a + "=", "'" + a + "':")
+        return eval("{" + arg + "}")
 
     def parseVec(net):
         return np.array(eval(net.readline()[:-1]))
@@ -848,12 +871,12 @@ def from_eran_pyt(path):
         return torch.from_numpy(array)
 
     def extract_mean(text):
-        mean = ''
-        m = re.search('mean=\[(.+?)\]', text)
+        mean = ""
+        m = re.search("mean=\[(.+?)\]", text)
 
         if m:
             means = m.group(1)
-        mean_str = means.split(',')
+        mean_str = means.split(",")
         num_means = len(mean_str)
         mean_array = np.zeros(num_means)
         for i in range(num_means):
@@ -861,38 +884,38 @@ def from_eran_pyt(path):
         return mean_array
 
     def extract_std(text):
-        std = ''
-        m = re.search('std=\[(.+?)\]', text)
+        std = ""
+        m = re.search("std=\[(.+?)\]", text)
         if m:
             stds = m.group(1)
-        std_str =stds.split(',')
+        std_str = stds.split(",")
         num_std = len(std_str)
         std_array = np.zeros(num_std)
         for i in range(num_std):
             std_array[i] = np.float64(std_str[i])
         return std_array
 
-    net = open(path,'r')
+    net = open(path, "r")
     last_layer = None
 
     layers = []
     while True:
         curr_line = net.readline()[:-1]
 
-        if 'Normalize' in curr_line:
+        if "Normalize" in curr_line:
             mean = myConst(extract_mean(curr_line))
-            std  = myConst(extract_std(curr_line))
+            std = myConst(extract_std(curr_line))
             layers.append(
                 NormalizeInput(
-                    mean = mean.reshape(1, 3, 1, 1),
-                    std  = std.reshape(1, 3, 1, 1),
+                    mean=mean.reshape(1, 3, 1, 1),
+                    std=std.reshape(1, 3, 1, 1),
                 )
             )
 
         elif curr_line in ["ReLU", "Affine"]:
             W = None
 
-            if (last_layer in ["Conv2D"]):
+            if last_layer in ["Conv2D"]:
                 layers.append(Flatten(start_dim=1))
                 W = myConst(parseVec(net).transpose())
 
@@ -903,8 +926,8 @@ def from_eran_pyt(path):
             b = myConst(parseVec(net))
 
             layer = Linear(
-                in_features = I,
-                out_features= O,
+                in_features=I,
+                out_features=O,
             )
             with torch.no_grad():
                 layer.weight[:] = W.T
@@ -912,10 +935,10 @@ def from_eran_pyt(path):
 
             layers.append(layer)
 
-            if(curr_line=="Affine"):
+            if curr_line == "Affine":
                 pass
 
-            elif(curr_line=="ReLU"):
+            elif curr_line == "ReLU":
                 layers.append(ReLU())
                 pass
 
@@ -926,41 +949,46 @@ def from_eran_pyt(path):
             line = net.readline()
 
             start = 0
-            if("ReLU" in line):
+            if "ReLU" in line:
                 start = 5
-            elif("Affine" in line):
+            elif "Affine" in line:
                 start = 7
 
-            if 'padding' in line:
-                args = runRepl(line[start:-1], ["filters", "input_shape", "kernel_size", "stride", "padding"])
+            if "padding" in line:
+                args = runRepl(
+                    line[start:-1],
+                    ["filters", "input_shape", "kernel_size", "stride", "padding"],
+                )
             else:
-                args = runRepl(line[start:-1], ["filters", "input_shape", "kernel_size"])
+                args = runRepl(
+                    line[start:-1], ["filters", "input_shape", "kernel_size"]
+                )
 
-            _, _, I = args['input_shape']
-            O = args['filters']
-            W, H = args['kernel_size']
-            padding = args.get('padding', 0)
+            _, _, I = args["input_shape"]
+            O = args["filters"]
+            W, H = args["kernel_size"]
+            padding = args.get("padding", 0)
 
             layer = Conv2d(
-                in_channels  = I,
-                out_channels = O,
-                kernel_size  = (W, H),
-                stride       = tuple(args['stride']),
-                padding      = padding,
-                padding_mode = 'zeros' if padding >= 1 else 'zeros',
+                in_channels=I,
+                out_channels=O,
+                kernel_size=(W, H),
+                stride=tuple(args["stride"]),
+                padding=padding,
+                padding_mode="zeros" if padding >= 1 else "zeros",
             )
 
             with torch.no_grad():
-                W = myConst(parseVec(net)).permute(3,2,0,1)
+                W = myConst(parseVec(net)).permute(3, 2, 0, 1)
                 b = myConst(parseVec(net))
                 assert W.shape == layer.weight.shape
                 assert b.shape == layer.bias.shape
                 layer.weight[:] = W
-                layer.bias  [:] = b
+                layer.bias[:] = b
 
             layers.append(layer)
 
-            if("ReLU" in line):
+            if "ReLU" in line:
                 layers.append(ReLU())
             else:
                 raise Exception("Unsupported activation: ", curr_line)
