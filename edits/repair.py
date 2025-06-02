@@ -72,7 +72,15 @@ def repair_model(edit_set_path="data/edit_sets/misclassified_edit_dataset.pt",
                 if repaired_pred.item() != true_label:
                     all_correct = False
 
-        original_torch_model = alexnet()
+        # Create a fresh PyTorch AlexNet model (not sytorch)
+        from model_classes.alexnet import AlexNet
+        original_torch_model = AlexNet(10)
+        
+        # Load the base weights into the fresh model
+        base_state_dict = torch.load("artifacts/alexnet_base.pth", map_location=device)
+        original_torch_model.load_state_dict(base_state_dict)
+        
+        # Copy repaired parameters from sytorch model to PyTorch model
         with torch.no_grad():
             for (name, param), (_, torch_param) in zip(N.named_parameters(), original_torch_model.named_parameters()):
                 torch_param.data.copy_(param.data.to(torch_param.dtype))
