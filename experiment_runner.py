@@ -70,6 +70,19 @@ FIELDNAMES = [
     "error_message",
 ]
 
+# Frontend dispatcher: forward to appropriate experiment script
+if len(sys.argv) > 1 and sys.argv[1] == "stochastic_repair":
+    cmd = [
+        sys.executable,
+        os.path.join(os.path.dirname(__file__), "experiments", "stochastic_repair.py"),
+    ] + sys.argv[2:]
+    sys.exit(subprocess.call(cmd))
+if len(sys.argv) > 1 and sys.argv[1] == "repair_set":
+    cmd = [
+        sys.executable,
+        os.path.join(os.path.dirname(__file__), "experiments", "repair_set.py"),
+    ] + sys.argv[2:]
+    sys.exit(subprocess.call(cmd))
 
 def parse_gurobi_log(log_output):
     """

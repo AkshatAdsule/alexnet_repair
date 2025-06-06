@@ -10,11 +10,16 @@ device = st.device("cpu")
 dtype = st.float32
 
 
-def repair_model(edit_set_path="data/edit_sets/misclassified_edit_dataset.pt", 
-                 param_bound=5.0, margin=2.0, output_path="artifacts/alexnet_repaired.pth"):
+def repair_model(
+    edit_set_path="data/edit_sets/misclassified_edit_dataset.pt",
+    param_bound=5.0,
+    margin=2.0,
+    output_path="artifacts/alexnet_repaired.pth",
+    base_state_dict_path="artifacts/alexnet_base.pth",
+):
     """Repair AlexNet model on edit set images."""
-    
-    model = alexnet(state_dict_path="artifacts/alexnet_base.pth")
+
+    model = alexnet(state_dict_path=base_state_dict_path)
     model = model.to(dtype=dtype, device=device)
     model.eval()
 
