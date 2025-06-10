@@ -1,205 +1,183 @@
 # AlexNet Repair
 
-This repository contains tools for repairing AlexNet models using constraint-based methods and studying the effects of different repair configurations.
+A toolkit for repairing CIFAR-10 AlexNet models using APRNN, and for studying the impact of different repair configurations on model performance.
 
-## Basic Usage
+---
 
-1. **Generate Edit Sets**:
-   ```bash
-   # Generate misclassified edit set
-   uv run python editset_generator.py misclassified
+## Table of Contents
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Prerequisites](#prerequisites)
+4. [Installation](#installation)
+5. [Quickstart](#quickstart)
+6. [Command-Line Tools](#command-line-tools)
+   - [Edit Set Generation](#1-edit-set-generation)
+   - [Model Repair](#2-model-repair)
+   - [Model Evaluation](#3-model-evaluation)
+   - [Experiment Runner](#4-experiment-runner)
+   - [Utilities & Analysis](#5-utilities--analysis)
+7. [Directory Structure](#directory-structure)
+8. [CIFAR-10 Classes](#cifar-10-classes)
+9. [Development & Contribution](#development--contribution)
+10. [Citation](#citation)
+11. [License](#license)
 
-   # Generate class-specific edit set for cats (class 3)
-   uv run python editset_generator.py by-class --target-class 3
-   ```
 
-2. **Repair Model**:
-   ```bash
-   # Repair on misclassified edit set
-   uv run python run_repair.py misclassified
+## Overview
 
-   # Repair on class-specific edit set
-   uv run python run_repair.py by-class --target-class 3
-   ```
+AlexNet Repair is a Python-based framework for:
 
-3. **Evaluate Model**:
-   ```bash
-   # Evaluate base model
-   uv run python eval.py --weights artifacts/alexnet_base.pth
+- Generating **edit sets** (patches of training or test samples) highlighting model misbehavior.
+- Applying **constraint-based repairs** to the AlexNet architecture using a Gurobi backend.
+- Evaluating and analyzing the effects of repairs on overall model accuracy and on specific classes.
 
-   # Evaluate repaired model
-   uv run python eval.py --weights artifacts/alexnet_repaired.pth
-   ```
+This project leverages the framework `sytorch` to express and solve repair constraints.
 
-## Experiment Runner
 
-The experiment runner automates the process of running multiple model repair experiments with varying configurations. This is useful for studying the impact of repair-set size and type on the repair process.
+## Features
 
-### Features
+- Flexible edit set generation (misclassified samples, class-specific).
+- Parameter-bound and margin-based repairs via mixed-integer programming.
+- Automated experiments with variable repair-set sizes and types.
+- Detailed logging of solver metrics (runtime, Gurobi iterations).
+- Post-repair evaluation and drawdown analysis.
+- Utilities for stochastic analysis, model conversion, and verification.
 
-The experiment runner can automatically:
 
-- Generate different types and sizes of edit sets
-- Run model repairs with various parameters
-- Measure repair performance (runtime, Gurobi iterations)
-- Evaluate model accuracy before and after repair
-- Calculate "drawdown" (accuracy impact on non-edit samples)
-- Store all results in machine-readable CSV format
+## Prerequisites
 
-### Usage
+- **Python** 3.8 or higher
+- **Gurobi** optimizer (version 9.0+) with a valid license
+- **CIFAR-10** dataset (automatically downloaded `data/`)
 
-#### Basic Experiment
 
+## Installation
+
+1. Clone the repository:
+    ```bash
+    git clone https://github.com/your-org/alexnet_repair.git
+    cd alexnet_repair
+    ```
+
+2. Install dependencies using UV (the project's dependency manager):
+    ```bash
+    uv sync
+    ```
+   or via pip:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+## Quickstart
+
+### 1. Generate an Edit Set
+
+- Misclassified samples:
+  ```bash
+  uv run python editset_generator.py misclassified --max-size 100
+  ```
+
+- Class-specific incorrect samples (e.g., class 3 = "cat"):
+  ```bash
+  uv run python editset_generator.py by-class --target-class 3 --max-size 50
+  ```
+
+Generated sets are saved under `data/edit_sets/`.
+
+
+### 2. Repair the Model
+
+- Repair on a misclassified edit set:
+  ```bash
+  uv run python run_repair.py misclassified --param-bound 5.0 --margin 2.0
+  ```
+
+- Repair on a class-specific edit set:
+  ```bash
+  uv run python run_repair.py by-class --target-class 3 --param-bound 3.0 --margin 1.5
+  ```
+
+The repaired weights are saved in `artifacts/alexnet_repaired.pth`.
+
+
+### 3. Evaluate Model Performance
+
+- Evaluate baseline AlexNet:
+  ```bash
+  uv run python eval.py --weights artifacts/alexnet_base.pth --cuda
+  ```
+
+- Evaluate repaired AlexNet:
+  ```bash
+  uv run python eval.py --weights artifacts/alexnet_repaired.pth --cuda
+  ```
+
+Results are printed to console and logged in `results/`.
+
+
+## Command-Line Tools
+
+### 1. Edit Set Generation
+
+**Script:** `editset_generator.py`
+
+Usage:
 ```bash
-# Simple experiment with misclassified edit sets
-uv run python experiment_runner.py \
-  --repair-set-sizes 10 50 100 \
-  --repair-set-types misclassified \
-  --output-file results/basic_experiment.csv
+uv run python editset_generator.py <mode> [options]
 ```
 
-#### Class-Specific Experiments
+- `<mode>`:
+  - `misclassified`: images the base model misclassifies
+  - `by-class`: samples from a single class (correct or incorrect)
 
+- **Options**:
+  - `--max-size`: Maximum number of samples
+  - `--target-class`: (for `by-class` mode) integer 0–9
+
+### 2. Model Repair
+
+**Script:** `run_repair.py`
+
+Usage:
 ```bash
-# Experiment with class-specific edit sets
-uv run python experiment_runner.py \
-  --repair-set-sizes 25 50 100 \
-  --repair-set-types class_homogeneous_incorrect \
-  --target-classes 0 3 5 7 \
-  --output-file results/class_experiment.csv
+uv run python run_repair.py <mode> [options]
 ```
 
-#### Full Experiment Suite
+- **Options**:
+  - `--param-bound`: maximum allowed parameter change (default: 5.0)
+  - `--margin`: classification margin (default: 2.0)
+  - `--output`: path to save repaired model (default: `artifacts/alexnet_repaired.pth`)
 
+### 3. Model Evaluation
+
+**Script:** `eval.py`
+
+Usage:
 ```bash
-# Comprehensive experiment comparing different repair set types and sizes
-uv run python experiment_runner.py \
-  --repair-set-sizes 10 25 50 100 200 \
-  --repair-set-types misclassified class_homogeneous_incorrect \
-  --target-classes 0 1 2 3 4 5 6 7 8 9 \
-  --param-bound 5.0 \
-  --margin 2.0 \
-  --output-file results/full_experiment.csv
+uv run python eval.py --weights <model_path> [--cuda] [--batch-size N]
 ```
 
-### Available Options
+- `--weights`: path to `.pth` model file
+- `--cuda`: enable GPU evaluation
+- `--batch-size`: evaluation batch size (default: 128)
 
-- `--repair-set-sizes`: List of edit set sizes to test (e.g., `10 50 100`)
-- `--repair-set-types`: Types of repair sets:
-  - `misclassified`: Images the baseline model misclassifies
-  - `class_homogeneous_correct`: Correctly classified images from a single class  
-  - `class_homogeneous_incorrect`: Incorrectly classified images from a single class
-- `--target-classes`: CIFAR-10 classes to test (0-9, default: all classes)
-- `--param-bound`: Parameter change bound for repair (default: 5.0)
-- `--margin`: Classification margin for repair (default: 2.0)
-- `--output-file`: CSV file for results (default: `results/experiment_data.csv`)
 
-### Output Format
+### 4. Experiment Runner
 
-The experiment runner produces a CSV file with the following columns:
+**Script:** `experiment_runner.py`
 
-#### Experiment Metadata
-- `experiment_id`: Unique identifier for each run
-- `timestamp`: When the experiment was executed
+Automates generating edit sets, repairing, and evaluating over multiple configurations.
 
-#### Configuration Parameters
-- `repair_set_type`: Type of edit set used
-- `repair_set_focus`: Classification focus (currently `incorrect_only`)
-- `requested_repair_set_size`: Target size for edit set
-- `edit_set_sizing_strategy`: Sizing strategy (currently `flexible`)
-- `actual_repair_set_size`: Actual number of images in edit set
-- `edit_set_path`: Path to the generated edit set file
-- `target_class`: Target class (for class-specific experiments)
-- `param_bound`: Parameter bound used for repair
-- `margin`: Margin used for repair
-
-#### Baseline Model Performance
-- `baseline_model_path`: Path to baseline model
-- `baseline_accuracy_test_set`: Baseline accuracy on full test set
-- `baseline_accuracy_edit_set`: Baseline accuracy on edit set
-
-#### Repair Process Metrics
-- `repair_runtime_seconds`: Wall-clock time for repair process
-- `gurobi_barrier_iterations`: Number of Gurobi solver iterations
-- `repair_successful`: Whether repair succeeded (True/False)
-
-#### Repaired Model Performance
-- `repaired_model_path`: Path to repaired model (if successful)
-- `repaired_accuracy_test_set`: Repaired model accuracy on full test set
-- `repaired_accuracy_edit_set`: Repaired model accuracy on edit set
-- `repaired_accuracy_drawdown_set`: Repaired model accuracy on test set excluding edit samples
-
-#### Error Handling
-- `error_message`: Error details if experiment failed
-
-### Example Analysis
-
-After running experiments, you can analyze the results:
-
-```python
-import pandas as pd
-import matplotlib.pyplot as plt
-
-# Load results
-df = pd.read_csv('results/experiment_data.csv')
-
-# Plot repair set size vs. accuracy
-plt.figure(figsize=(10, 6))
-for repair_type in df['repair_set_type'].unique():
-    subset = df[df['repair_set_type'] == repair_type]
-    plt.plot(subset['requested_repair_set_size'], 
-             subset['repaired_accuracy_test_set'], 
-             marker='o', label=repair_type)
-
-plt.xlabel('Repair Set Size')
-plt.ylabel('Test Set Accuracy After Repair')
-plt.legend()
-plt.title('Repair Set Size vs. Model Performance')
-plt.show()
-
-# Analyze runtime vs. set size
-plt.figure(figsize=(10, 6))
-plt.scatter(df['actual_repair_set_size'], df['repair_runtime_seconds'])
-plt.xlabel('Edit Set Size')
-plt.ylabel('Repair Runtime (seconds)')
-plt.title('Repair Runtime vs. Edit Set Size')
-plt.show()
-```
-
-## Project Structure
-
-```
-alexnet_repair/
-├── artifacts/              # Model files and outputs
-├── data/                    # CIFAR-10 data and edit sets
-├── edits/                   # Repair algorithms
-├── editset_helpers/         # Edit set generation utilities
-├── helpers/                 # General utilities
-├── model_classes/           # Model definitions
-├── sytorch/                 # Symbolic computation framework
-├── templates/               # Web interface templates
-├── editset_generator.py     # Generate different edit sets
-├── experiment_runner.py     # Automated experiment execution
-├── run_repair.py           # Run model repair
-├── eval.py                 # Model evaluation
-└── README.md               # This file
-```
-
-## CIFAR-10 Classes
-
-```
-0: airplane    1: automobile  2: bird     3: cat      4: deer
-5: dog         6: frog        7: horse    8: ship     9: truck
-```
-
-## Development
-
-This project uses UV for dependency management. The design specification for the experiment runner can be found in `EXPERIMENT_RUNNER_DESIGN_SPEC.md`.
-
-For more detailed usage instructions, run any script with `--help`:
-
+Usage:
 ```bash
-uv run python experiment_runner.py --help
-uv run python editset_generator.py --help  
-uv run python run_repair.py --help
+uv run python experiment_runner.py --repair-set-sizes 10 50 100 \
+    --repair-set-types misclassified class_homogeneous_incorrect \
+    --target-classes 0 1 2 3 \
+    --param-bound 5.0 --margin 2.0 \
+    --output-file results/experiment.csv
 ```
+
+
+### 5. Utilities & Analysis
+
+- `analysis.py` / `analyze_stochastic.py`: scripts for analysis and visualization.
