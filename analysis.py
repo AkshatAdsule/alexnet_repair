@@ -9,6 +9,23 @@ plt.style.use("seaborn-v0_8")
 sns.set_palette("husl")
 
 
+def create_directories():
+    """Create organized directory structure for results"""
+    base_dir = Path("results")
+    subdirs = [
+        "one_shot_analysis",
+        "one_shot_analysis/success_rates",
+        "one_shot_analysis/runtime",
+        "one_shot_analysis/accuracy",
+        "one_shot_analysis/iterations",
+    ]
+
+    for subdir in subdirs:
+        (base_dir / subdir).mkdir(parents=True, exist_ok=True)
+
+    return base_dir
+
+
 def load_and_prepare_data():
     """Load and prepare the experimental data"""
     df = pd.read_csv("results/full_experiment.csv")
@@ -28,24 +45,22 @@ def load_and_prepare_data():
     return df
 
 
-def plot_success_rate_analysis(df):
-    """Analyze repair success rates"""
-    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-    fig.suptitle("Repair Success Rate Analysis", fontsize=16, fontweight="bold")
+def plot_success_rate_analysis(df, base_dir):
+    """Analyze repair success rates - individual plots"""
+    save_dir = base_dir / "one_shot_analysis" / "success_rates"
 
-    # Success rate by repair set size
+    # 1. Success rate by repair set size
+    fig, ax = plt.subplots(figsize=(10, 6))
     success_by_size = (
         df.groupby("requested_repair_set_size")["success_rate"]
         .agg(["mean", "count"])
         .reset_index()
     )
-    axes[0, 0].bar(
-        success_by_size["requested_repair_set_size"], success_by_size["mean"]
-    )
-    axes[0, 0].set_title("Success Rate by Repair Set Size")
-    axes[0, 0].set_xlabel("Repair Set Size")
-    axes[0, 0].set_ylabel("Success Rate")
-    axes[0, 0].set_ylim(0, 1)
+    bars = ax.bar(success_by_size["requested_repair_set_size"], success_by_size["mean"])
+    ax.set_title("Success Rate by Repair Set Size", fontsize=14, fontweight="bold")
+    ax.set_xlabel("Repair Set Size")
+    ax.set_ylabel("Success Rate")
+    ax.set_ylim(0, 1)
 
     # Add count labels on bars
     for i, (size, rate, count) in enumerate(
@@ -55,68 +70,82 @@ def plot_success_rate_analysis(df):
             success_by_size["count"],
         )
     ):
-        axes[0, 0].text(size, rate + 0.02, f"n={count}", ha="center", va="bottom")
+        ax.text(size, rate + 0.02, f"n={count}", ha="center", va="bottom")
 
-    # Success rate by repair set type
+    plt.tight_layout()
+    plt.savefig(save_dir / "success_rate_by_size.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # 2. Success rate by repair set type
+    fig, ax = plt.subplots(figsize=(10, 6))
     success_by_type = (
         df.groupby("repair_set_type")["success_rate"]
         .agg(["mean", "count"])
         .reset_index()
     )
-    axes[0, 1].bar(success_by_type["repair_set_type"], success_by_type["mean"])
-    axes[0, 1].set_title("Success Rate by Repair Set Type")
-    axes[0, 1].set_xlabel("Repair Set Type")
-    axes[0, 1].set_ylabel("Success Rate")
-    axes[0, 1].set_ylim(0, 1)
-    axes[0, 1].tick_params(axis="x", rotation=45)
+    ax.bar(success_by_type["repair_set_type"], success_by_type["mean"])
+    ax.set_title("Success Rate by Repair Set Type", fontsize=14, fontweight="bold")
+    ax.set_xlabel("Repair Set Type")
+    ax.set_ylabel("Success Rate")
+    ax.set_ylim(0, 1)
+    ax.tick_params(axis="x", rotation=45)
 
-    # Success rate by target class (for class_homogeneous_incorrect only)
+    plt.tight_layout()
+    plt.savefig(save_dir / "success_rate_by_type.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # 3. Success rate by target class (for class_homogeneous_incorrect only)
     class_data = df[df["repair_set_type"] == "class_homogeneous_incorrect"].copy()
     if not class_data.empty:
+        fig, ax = plt.subplots(figsize=(10, 6))
         success_by_class = (
             class_data.groupby("target_class")["success_rate"]
             .agg(["mean", "count"])
             .reset_index()
         )
-        axes[1, 0].bar(success_by_class["target_class"], success_by_class["mean"])
-        axes[1, 0].set_title("Success Rate by Target Class")
-        axes[1, 0].set_xlabel("Target Class")
-        axes[1, 0].set_ylabel("Success Rate")
-        axes[1, 0].set_ylim(0, 1)
+        ax.bar(success_by_class["target_class"], success_by_class["mean"])
+        ax.set_title("Success Rate by Target Class", fontsize=14, fontweight="bold")
+        ax.set_xlabel("Target Class")
+        ax.set_ylabel("Success Rate")
+        ax.set_ylim(0, 1)
 
-    # Success rate heatmap by size and type
+        plt.tight_layout()
+        plt.savefig(
+            save_dir / "success_rate_by_class.png", dpi=300, bbox_inches="tight"
+        )
+        plt.close()
+
+    # 4. Success rate heatmap by size and type
+    fig, ax = plt.subplots(figsize=(12, 8))
     pivot_data = df.pivot_table(
         values="success_rate",
         index="repair_set_type",
         columns="requested_repair_set_size",
         aggfunc="mean",
     )
-    sns.heatmap(
-        pivot_data, annot=True, fmt=".2f", cmap="RdYlGn", vmin=0, vmax=1, ax=axes[1, 1]
-    )
-    axes[1, 1].set_title("Success Rate Heatmap")
+    sns.heatmap(pivot_data, annot=True, fmt=".2f", cmap="RdYlGn", vmin=0, vmax=1, ax=ax)
+    ax.set_title("Success Rate Heatmap", fontsize=14, fontweight="bold")
 
     plt.tight_layout()
-    plt.savefig("results/success_rate_analysis.png", dpi=300, bbox_inches="tight")
-    plt.show()
+    plt.savefig(save_dir / "success_rate_heatmap.png", dpi=300, bbox_inches="tight")
+    plt.close()
 
 
-def plot_runtime_analysis(df):
-    """Analyze repair runtime characteristics"""
-    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-    fig.suptitle("Runtime Analysis", fontsize=16, fontweight="bold")
-
-    # Runtime vs repair set size
+def plot_runtime_analysis(df, base_dir):
+    """Analyze repair runtime characteristics - individual plots"""
+    save_dir = base_dir / "one_shot_analysis" / "runtime"
     successful_df = df[df["repair_successful"] == True]
 
-    axes[0, 0].scatter(
+    # 1. Runtime vs repair set size scatter
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.scatter(
         successful_df["requested_repair_set_size"],
         successful_df["repair_runtime_seconds"],
         alpha=0.6,
     )
-    axes[0, 0].set_xlabel("Repair Set Size")
-    axes[0, 0].set_ylabel("Runtime (seconds)")
-    axes[0, 0].set_title("Runtime vs Repair Set Size")
+    ax.set_xlabel("Repair Set Size")
+    ax.set_ylabel("Runtime (seconds)")
+    ax.set_title("Runtime vs Repair Set Size", fontsize=14, fontweight="bold")
 
     # Add trend line
     z = np.polyfit(
@@ -125,35 +154,55 @@ def plot_runtime_analysis(df):
         1,
     )
     p = np.poly1d(z)
-    axes[0, 0].plot(
+    ax.plot(
         successful_df["requested_repair_set_size"],
         p(successful_df["requested_repair_set_size"]),
         "r--",
         alpha=0.8,
     )
 
-    # Runtime by repair set type
+    plt.tight_layout()
+    plt.savefig(save_dir / "runtime_vs_size_scatter.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # 2. Runtime by repair set type boxplot
+    fig, ax = plt.subplots(figsize=(10, 6))
     sns.boxplot(
         data=successful_df,
         x="repair_set_type",
         y="repair_runtime_seconds",
-        ax=axes[0, 1],
+        ax=ax,
     )
-    axes[0, 1].set_title("Runtime Distribution by Repair Set Type")
-    axes[0, 1].tick_params(axis="x", rotation=45)
+    ax.set_title(
+        "Runtime Distribution by Repair Set Type", fontsize=14, fontweight="bold"
+    )
+    ax.tick_params(axis="x", rotation=45)
 
-    # Gurobi iterations vs runtime
+    plt.tight_layout()
+    plt.savefig(save_dir / "runtime_by_type_boxplot.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # 3. Gurobi iterations vs runtime
     iteration_data = successful_df.dropna(subset=["gurobi_barrier_iterations"])
-    axes[1, 0].scatter(
-        iteration_data["gurobi_barrier_iterations"],
-        iteration_data["repair_runtime_seconds"],
-        alpha=0.6,
-    )
-    axes[1, 0].set_xlabel("Gurobi Barrier Iterations")
-    axes[1, 0].set_ylabel("Runtime (seconds)")
-    axes[1, 0].set_title("Runtime vs Gurobi Iterations")
+    if not iteration_data.empty:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.scatter(
+            iteration_data["gurobi_barrier_iterations"],
+            iteration_data["repair_runtime_seconds"],
+            alpha=0.6,
+        )
+        ax.set_xlabel("Gurobi Barrier Iterations")
+        ax.set_ylabel("Runtime (seconds)")
+        ax.set_title("Runtime vs Gurobi Iterations", fontsize=14, fontweight="bold")
 
-    # Runtime statistics by size
+        plt.tight_layout()
+        plt.savefig(
+            save_dir / "runtime_vs_gurobi_iterations.png", dpi=300, bbox_inches="tight"
+        )
+        plt.close()
+
+    # 4. Runtime statistics by size
+    fig, ax = plt.subplots(figsize=(10, 6))
     runtime_stats = (
         successful_df.groupby("requested_repair_set_size")["repair_runtime_seconds"]
         .agg(["mean", "median", "std"])
@@ -161,7 +210,7 @@ def plot_runtime_analysis(df):
     )
 
     x = runtime_stats["requested_repair_set_size"]
-    axes[1, 1].errorbar(
+    ax.errorbar(
         x,
         runtime_stats["mean"],
         yerr=runtime_stats["std"],
@@ -169,25 +218,26 @@ def plot_runtime_analysis(df):
         capsize=5,
         label="Mean ± Std",
     )
-    axes[1, 1].plot(x, runtime_stats["median"], marker="s", label="Median")
-    axes[1, 1].set_xlabel("Repair Set Size")
-    axes[1, 1].set_ylabel("Runtime (seconds)")
-    axes[1, 1].set_title("Runtime Statistics by Size")
-    axes[1, 1].legend()
+    ax.plot(x, runtime_stats["median"], marker="s", label="Median")
+    ax.set_xlabel("Repair Set Size")
+    ax.set_ylabel("Runtime (seconds)")
+    ax.set_title("Runtime Statistics by Size", fontsize=14, fontweight="bold")
+    ax.legend()
 
     plt.tight_layout()
-    plt.savefig("results/runtime_analysis.png", dpi=300, bbox_inches="tight")
-    plt.show()
+    plt.savefig(
+        save_dir / "runtime_statistics_by_size.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close()
 
 
-def plot_accuracy_analysis(df):
-    """Analyze accuracy changes"""
-    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-    fig.suptitle("Accuracy Analysis", fontsize=16, fontweight="bold")
-
+def plot_accuracy_analysis(df, base_dir):
+    """Analyze accuracy changes - individual plots"""
+    save_dir = base_dir / "one_shot_analysis" / "accuracy"
     successful_df = df[df["repair_successful"] == True]
 
-    # Test set accuracy change by repair set size
+    # 1. Test set accuracy change by repair set size
+    fig, ax = plt.subplots(figsize=(10, 6))
     accuracy_by_size = (
         successful_df.groupby("requested_repair_set_size")["accuracy_change"]
         .agg(["mean", "std", "count"])
@@ -195,123 +245,173 @@ def plot_accuracy_analysis(df):
     )
 
     x = accuracy_by_size["requested_repair_set_size"]
-    axes[0, 0].errorbar(
+    ax.errorbar(
         x, accuracy_by_size["mean"], yerr=accuracy_by_size["std"], marker="o", capsize=5
     )
-    axes[0, 0].axhline(y=0, color="red", linestyle="--", alpha=0.7)
-    axes[0, 0].set_xlabel("Repair Set Size")
-    axes[0, 0].set_ylabel("Test Set Accuracy Change")
-    axes[0, 0].set_title("Test Set Accuracy Change by Size")
+    ax.axhline(y=0, color="red", linestyle="--", alpha=0.7)
+    ax.set_xlabel("Repair Set Size")
+    ax.set_ylabel("Test Set Accuracy Change")
+    ax.set_title("Test Set Accuracy Change by Size", fontsize=14, fontweight="bold")
 
-    # Accuracy change by repair set type
-    sns.boxplot(
-        data=successful_df, x="repair_set_type", y="accuracy_change", ax=axes[0, 1]
-    )
-    axes[0, 1].axhline(y=0, color="red", linestyle="--", alpha=0.7)
-    axes[0, 1].set_title("Test Set Accuracy Change by Type")
-    axes[0, 1].tick_params(axis="x", rotation=45)
+    plt.tight_layout()
+    plt.savefig(save_dir / "accuracy_change_by_size.png", dpi=300, bbox_inches="tight")
+    plt.close()
 
-    # Edit set accuracy (should be 1.0 for successful repairs)
+    # 2. Accuracy change by repair set type
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.boxplot(data=successful_df, x="repair_set_type", y="accuracy_change", ax=ax)
+    ax.axhline(y=0, color="red", linestyle="--", alpha=0.7)
+    ax.set_title("Test Set Accuracy Change by Type", fontsize=14, fontweight="bold")
+    ax.tick_params(axis="x", rotation=45)
+
+    plt.tight_layout()
+    plt.savefig(save_dir / "accuracy_change_by_type.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # 3. Edit set accuracy (should be 1.0 for successful repairs)
+    fig, ax = plt.subplots(figsize=(10, 6))
     edit_acc_by_size = (
         successful_df.groupby("requested_repair_set_size")["repaired_accuracy_edit_set"]
         .agg(["mean", "std"])
         .reset_index()
     )
 
-    axes[0, 2].bar(
-        edit_acc_by_size["requested_repair_set_size"], edit_acc_by_size["mean"]
-    )
-    axes[0, 2].set_xlabel("Repair Set Size")
-    axes[0, 2].set_ylabel("Edit Set Accuracy (Repaired)")
-    axes[0, 2].set_title("Edit Set Accuracy After Repair")
-    axes[0, 2].set_ylim(0.9, 1.01)
+    ax.bar(edit_acc_by_size["requested_repair_set_size"], edit_acc_by_size["mean"])
+    ax.set_xlabel("Repair Set Size")
+    ax.set_ylabel("Edit Set Accuracy (Repaired)")
+    ax.set_title("Edit Set Accuracy After Repair", fontsize=14, fontweight="bold")
+    ax.set_ylim(0.9, 1.01)
 
-    # Baseline vs repaired accuracy scatter
-    axes[1, 0].scatter(
+    plt.tight_layout()
+    plt.savefig(
+        save_dir / "edit_set_accuracy_after_repair.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close()
+
+    # 4. Baseline vs repaired accuracy scatter
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.scatter(
         successful_df["baseline_accuracy_test_set"],
         successful_df["repaired_accuracy_test_set"],
         alpha=0.6,
     )
-    axes[1, 0].plot([0, 1], [0, 1], "r--", alpha=0.7)  # Perfect correlation line
-    axes[1, 0].set_xlabel("Baseline Test Set Accuracy")
-    axes[1, 0].set_ylabel("Repaired Test Set Accuracy")
-    axes[1, 0].set_title("Baseline vs Repaired Accuracy")
+    ax.plot([0, 1], [0, 1], "r--", alpha=0.7)  # Perfect correlation line
+    ax.set_xlabel("Baseline Test Set Accuracy")
+    ax.set_ylabel("Repaired Test Set Accuracy")
+    ax.set_title("Baseline vs Repaired Accuracy", fontsize=14, fontweight="bold")
 
-    # Accuracy change by target class
+    plt.tight_layout()
+    plt.savefig(
+        save_dir / "baseline_vs_repaired_accuracy.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close()
+
+    # 5. Accuracy change by target class
     class_data = successful_df[
         successful_df["repair_set_type"] == "class_homogeneous_incorrect"
     ]
     if not class_data.empty:
+        fig, ax = plt.subplots(figsize=(10, 6))
         class_accuracy = (
             class_data.groupby("target_class")["accuracy_change"]
             .agg(["mean", "std"])
             .reset_index()
         )
 
-        axes[1, 1].bar(class_accuracy["target_class"], class_accuracy["mean"])
-        axes[1, 1].axhline(y=0, color="red", linestyle="--", alpha=0.7)
-        axes[1, 1].set_xlabel("Target Class")
-        axes[1, 1].set_ylabel("Test Set Accuracy Change")
-        axes[1, 1].set_title("Accuracy Change by Target Class")
+        ax.bar(class_accuracy["target_class"], class_accuracy["mean"])
+        ax.axhline(y=0, color="red", linestyle="--", alpha=0.7)
+        ax.set_xlabel("Target Class")
+        ax.set_ylabel("Test Set Accuracy Change")
+        ax.set_title("Accuracy Change by Target Class", fontsize=14, fontweight="bold")
 
-    # Accuracy vs runtime
-    axes[1, 2].scatter(
+        plt.tight_layout()
+        plt.savefig(
+            save_dir / "accuracy_change_by_class.png", dpi=300, bbox_inches="tight"
+        )
+        plt.close()
+
+    # 6. Accuracy vs runtime
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.scatter(
         successful_df["repair_runtime_seconds"],
         successful_df["accuracy_change"],
         alpha=0.6,
     )
-    axes[1, 2].axhline(y=0, color="red", linestyle="--", alpha=0.7)
-    axes[1, 2].set_xlabel("Runtime (seconds)")
-    axes[1, 2].set_ylabel("Test Set Accuracy Change")
-    axes[1, 2].set_title("Accuracy Change vs Runtime")
+    ax.axhline(y=0, color="red", linestyle="--", alpha=0.7)
+    ax.set_xlabel("Runtime (seconds)")
+    ax.set_ylabel("Test Set Accuracy Change")
+    ax.set_title("Accuracy Change vs Runtime", fontsize=14, fontweight="bold")
 
     plt.tight_layout()
-    plt.savefig("results/accuracy_analysis.png", dpi=300, bbox_inches="tight")
-    plt.show()
+    plt.savefig(
+        save_dir / "accuracy_change_vs_runtime.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close()
 
 
-def plot_iterations_analysis(df):
-    """Analyze Gurobi iterations"""
-    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-    fig.suptitle("Gurobi Iterations Analysis", fontsize=16, fontweight="bold")
+def plot_iterations_analysis(df, base_dir):
+    """Analyze Gurobi iterations - individual plots"""
+    save_dir = base_dir / "one_shot_analysis" / "iterations"
 
     # Filter for successful repairs with iteration data
     iteration_data = df[
         (df["repair_successful"] == True) & (df["gurobi_barrier_iterations"].notna())
     ]
 
-    # Iterations vs repair set size
-    axes[0, 0].scatter(
+    if iteration_data.empty:
+        print("No iteration data available for analysis")
+        return
+
+    # 1. Iterations vs repair set size
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.scatter(
         iteration_data["requested_repair_set_size"],
         iteration_data["gurobi_barrier_iterations"],
         alpha=0.6,
     )
-    axes[0, 0].set_xlabel("Repair Set Size")
-    axes[0, 0].set_ylabel("Gurobi Barrier Iterations")
-    axes[0, 0].set_title("Iterations vs Repair Set Size")
+    ax.set_xlabel("Repair Set Size")
+    ax.set_ylabel("Gurobi Barrier Iterations")
+    ax.set_title("Iterations vs Repair Set Size", fontsize=14, fontweight="bold")
 
-    # Iterations by repair set type
+    plt.tight_layout()
+    plt.savefig(save_dir / "iterations_vs_size.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # 2. Iterations by repair set type
+    fig, ax = plt.subplots(figsize=(10, 6))
     sns.boxplot(
         data=iteration_data,
         x="repair_set_type",
         y="gurobi_barrier_iterations",
-        ax=axes[0, 1],
+        ax=ax,
     )
-    axes[0, 1].set_title("Iterations by Repair Set Type")
-    axes[0, 1].tick_params(axis="x", rotation=45)
+    ax.set_title("Iterations by Repair Set Type", fontsize=14, fontweight="bold")
+    ax.tick_params(axis="x", rotation=45)
 
-    # Iterations vs accuracy change
-    axes[1, 0].scatter(
+    plt.tight_layout()
+    plt.savefig(save_dir / "iterations_by_type.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+    # 3. Iterations vs accuracy change
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.scatter(
         iteration_data["gurobi_barrier_iterations"],
         iteration_data["accuracy_change"],
         alpha=0.6,
     )
-    axes[1, 0].axhline(y=0, color="red", linestyle="--", alpha=0.7)
-    axes[1, 0].set_xlabel("Gurobi Barrier Iterations")
-    axes[1, 0].set_ylabel("Test Set Accuracy Change")
-    axes[1, 0].set_title("Accuracy Change vs Iterations")
+    ax.axhline(y=0, color="red", linestyle="--", alpha=0.7)
+    ax.set_xlabel("Gurobi Barrier Iterations")
+    ax.set_ylabel("Test Set Accuracy Change")
+    ax.set_title("Accuracy Change vs Iterations", fontsize=14, fontweight="bold")
 
-    # Iterations statistics by size
+    plt.tight_layout()
+    plt.savefig(
+        save_dir / "accuracy_change_vs_iterations.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close()
+
+    # 4. Iterations statistics by size
+    fig, ax = plt.subplots(figsize=(10, 6))
     iter_stats = (
         iteration_data.groupby("requested_repair_set_size")["gurobi_barrier_iterations"]
         .agg(["mean", "median", "std"])
@@ -319,7 +419,7 @@ def plot_iterations_analysis(df):
     )
 
     x = iter_stats["requested_repair_set_size"]
-    axes[1, 1].errorbar(
+    ax.errorbar(
         x,
         iter_stats["mean"],
         yerr=iter_stats["std"],
@@ -327,15 +427,17 @@ def plot_iterations_analysis(df):
         capsize=5,
         label="Mean ± Std",
     )
-    axes[1, 1].plot(x, iter_stats["median"], marker="s", label="Median")
-    axes[1, 1].set_xlabel("Repair Set Size")
-    axes[1, 1].set_ylabel("Gurobi Barrier Iterations")
-    axes[1, 1].set_title("Iteration Statistics by Size")
-    axes[1, 1].legend()
+    ax.plot(x, iter_stats["median"], marker="s", label="Median")
+    ax.set_xlabel("Repair Set Size")
+    ax.set_ylabel("Gurobi Barrier Iterations")
+    ax.set_title("Iteration Statistics by Size", fontsize=14, fontweight="bold")
+    ax.legend()
 
     plt.tight_layout()
-    plt.savefig("results/iterations_analysis.png", dpi=300, bbox_inches="tight")
-    plt.show()
+    plt.savefig(
+        save_dir / "iteration_statistics_by_size.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close()
 
 
 def generate_summary_statistics(df):
@@ -398,8 +500,8 @@ def generate_summary_statistics(df):
 
 def main():
     """Main analysis function"""
-    # Create results directory if it doesn't exist
-    Path("results").mkdir(exist_ok=True)
+    # Create organized directory structure
+    base_dir = create_directories()
 
     # Load data
     print("Loading experimental data...")
@@ -412,18 +514,20 @@ def main():
     print("\nGenerating visualizations...")
 
     print("  - Success rate analysis...")
-    plot_success_rate_analysis(df)
+    plot_success_rate_analysis(df, base_dir)
 
     print("  - Runtime analysis...")
-    plot_runtime_analysis(df)
+    plot_runtime_analysis(df, base_dir)
 
     print("  - Accuracy analysis...")
-    plot_accuracy_analysis(df)
+    plot_accuracy_analysis(df, base_dir)
 
     print("  - Iterations analysis...")
-    plot_iterations_analysis(df)
+    plot_iterations_analysis(df, base_dir)
 
-    print("\nAnalysis complete! Plots saved to results/ directory.")
+    print(
+        f"\nAnalysis complete! Individual plots saved to {base_dir}/one_shot_analysis/ directories."
+    )
 
 
 if __name__ == "__main__":

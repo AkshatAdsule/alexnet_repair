@@ -6,6 +6,22 @@ import numpy as np
 from pathlib import Path
 
 
+def create_directories():
+    """Create organized directory structure for stochastic results"""
+    base_dir = Path("results")
+    subdirs = [
+        "stochastic_analysis",
+        "stochastic_analysis/batch_iterations",
+        "stochastic_analysis/comparisons",
+        "stochastic_analysis/runtime",
+    ]
+
+    for subdir in subdirs:
+        (base_dir / subdir).mkdir(parents=True, exist_ok=True)
+
+    return base_dir
+
+
 def load_and_preprocess_data(csv_path):
     """Load and preprocess the experimental data."""
     df = pd.read_csv(csv_path)
@@ -24,9 +40,9 @@ def load_and_preprocess_data(csv_path):
     return df
 
 
-def plot_accuracy_over_iterations(df, save_dir="plots"):
-    """Create plots showing accuracy over iterations."""
-    Path(save_dir).mkdir(exist_ok=True)
+def plot_accuracy_over_iterations(df, base_dir):
+    """Create individual plots showing accuracy over iterations for each batch size."""
+    save_dir = base_dir / "stochastic_analysis" / "batch_iterations"
 
     # Get unique batch sizes
     batch_sizes = sorted(df["batch_size"].unique())
@@ -34,13 +50,13 @@ def plot_accuracy_over_iterations(df, save_dir="plots"):
     for batch_size in batch_sizes:
         batch_df = df[df["batch_size"] == batch_size]
 
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        # Plot 1: Test Accuracy for this batch size
+        fig, ax = plt.subplots(figsize=(12, 8))
 
-        # Plot 1: Test Accuracy
         # Misclassified experiments
         misc_df = batch_df[batch_df["homogeneity"] == "misclassified"]
         if not misc_df.empty:
-            ax1.plot(
+            ax.plot(
                 misc_df["iteration"],
                 misc_df["test_accuracy"],
                 "o-",
@@ -54,7 +70,7 @@ def plot_accuracy_over_iterations(df, save_dir="plots"):
         if not class_df.empty:
             for class_num in sorted(class_df["class_number"].unique()):
                 class_data = class_df[class_df["class_number"] == class_num]
-                ax1.plot(
+                ax.plot(
                     class_data["iteration"],
                     class_data["test_accuracy"],
                     "o-",
@@ -65,7 +81,7 @@ def plot_accuracy_over_iterations(df, save_dir="plots"):
 
             # Average across classes
             class_avg = class_df.groupby("iteration")["test_accuracy"].mean()
-            ax1.plot(
+            ax.plot(
                 class_avg.index,
                 class_avg.values,
                 "o-",
@@ -74,16 +90,30 @@ def plot_accuracy_over_iterations(df, save_dir="plots"):
                 color="blue",
             )
 
-        ax1.set_xlabel("Iteration")
-        ax1.set_ylabel("Test Accuracy")
-        ax1.set_title(f"Test Accuracy Over Iterations (Batch Size {batch_size})")
-        ax1.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
-        ax1.grid(True, alpha=0.3)
+        ax.set_xlabel("Iteration")
+        ax.set_ylabel("Test Accuracy")
+        ax.set_title(
+            f"Test Accuracy Over Iterations (Batch Size {batch_size})",
+            fontsize=14,
+            fontweight="bold",
+        )
+        ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+        ax.grid(True, alpha=0.3)
 
-        # Plot 2: Full Repair Set Accuracy
+        plt.tight_layout()
+        plt.savefig(
+            save_dir / f"test_accuracy_batch_{batch_size}.png",
+            dpi=300,
+            bbox_inches="tight",
+        )
+        plt.close()
+
+        # Plot 2: Full Repair Set Accuracy for this batch size
+        fig, ax = plt.subplots(figsize=(12, 8))
+
         # Misclassified experiments
         if not misc_df.empty:
-            ax2.plot(
+            ax.plot(
                 misc_df["iteration"],
                 misc_df["full_repair_accuracy"],
                 "o-",
@@ -96,7 +126,7 @@ def plot_accuracy_over_iterations(df, save_dir="plots"):
         if not class_df.empty:
             for class_num in sorted(class_df["class_number"].unique()):
                 class_data = class_df[class_df["class_number"] == class_num]
-                ax2.plot(
+                ax.plot(
                     class_data["iteration"],
                     class_data["full_repair_accuracy"],
                     "o-",
@@ -107,7 +137,7 @@ def plot_accuracy_over_iterations(df, save_dir="plots"):
 
             # Average across classes
             class_avg = class_df.groupby("iteration")["full_repair_accuracy"].mean()
-            ax2.plot(
+            ax.plot(
                 class_avg.index,
                 class_avg.values,
                 "o-",
@@ -116,36 +146,39 @@ def plot_accuracy_over_iterations(df, save_dir="plots"):
                 color="blue",
             )
 
-        ax2.set_xlabel("Iteration")
-        ax2.set_ylabel("Full Repair Set Accuracy")
-        ax2.set_title(
-            f"Full Repair Set Accuracy Over Iterations (Batch Size {batch_size})"
+        ax.set_xlabel("Iteration")
+        ax.set_ylabel("Full Repair Set Accuracy")
+        ax.set_title(
+            f"Full Repair Set Accuracy Over Iterations (Batch Size {batch_size})",
+            fontsize=14,
+            fontweight="bold",
         )
-        ax2.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
-        ax2.grid(True, alpha=0.3)
+        ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+        ax.grid(True, alpha=0.3)
 
         plt.tight_layout()
         plt.savefig(
-            f"{save_dir}/accuracy_batch_{batch_size}.png", dpi=300, bbox_inches="tight"
+            save_dir / f"repair_accuracy_batch_{batch_size}.png",
+            dpi=300,
+            bbox_inches="tight",
         )
-        plt.show()
+        plt.close()
 
 
-def plot_batch_size_comparison(df, save_dir="plots"):
-    """Create plots comparing different batch sizes."""
-    Path(save_dir).mkdir(exist_ok=True)
-
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(18, 12))
+def plot_batch_size_comparisons(df, base_dir):
+    """Create individual comparison plots for different aspects of batch size analysis."""
+    save_dir = base_dir / "stochastic_analysis" / "comparisons"
 
     batch_sizes = sorted(df["batch_size"].unique())
     colors = plt.cm.tab10(np.linspace(0, 1, len(batch_sizes)))
 
     # Plot 1: Misclassified - Test Accuracy
+    fig, ax = plt.subplots(figsize=(12, 8))
     misc_df = df[df["homogeneity"] == "misclassified"]
     for i, batch_size in enumerate(batch_sizes):
         batch_data = misc_df[misc_df["batch_size"] == batch_size]
         if not batch_data.empty:
-            ax1.plot(
+            ax.plot(
                 batch_data["iteration"],
                 batch_data["test_accuracy"],
                 "o-",
@@ -153,17 +186,28 @@ def plot_batch_size_comparison(df, save_dir="plots"):
                 label=f"Batch Size {batch_size}",
             )
 
-    ax1.set_xlabel("Iteration")
-    ax1.set_ylabel("Test Accuracy")
-    ax1.set_title("Misclassified: Test Accuracy by Batch Size")
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Test Accuracy")
+    ax.set_title(
+        "Misclassified: Test Accuracy by Batch Size", fontsize=14, fontweight="bold"
+    )
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(
+        save_dir / "misclassified_test_accuracy_comparison.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+    plt.close()
 
     # Plot 2: Misclassified - Full Repair Accuracy
+    fig, ax = plt.subplots(figsize=(12, 8))
     for i, batch_size in enumerate(batch_sizes):
         batch_data = misc_df[misc_df["batch_size"] == batch_size]
         if not batch_data.empty:
-            ax2.plot(
+            ax.plot(
                 batch_data["iteration"],
                 batch_data["full_repair_accuracy"],
                 "o-",
@@ -171,19 +215,32 @@ def plot_batch_size_comparison(df, save_dir="plots"):
                 label=f"Batch Size {batch_size}",
             )
 
-    ax2.set_xlabel("Iteration")
-    ax2.set_ylabel("Full Repair Set Accuracy")
-    ax2.set_title("Misclassified: Full Repair Set Accuracy by Batch Size")
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Full Repair Set Accuracy")
+    ax.set_title(
+        "Misclassified: Full Repair Set Accuracy by Batch Size",
+        fontsize=14,
+        fontweight="bold",
+    )
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(
+        save_dir / "misclassified_repair_accuracy_comparison.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+    plt.close()
 
     # Plot 3: Class Average - Test Accuracy
+    fig, ax = plt.subplots(figsize=(12, 8))
     class_df = df[df["homogeneity"] == "class_homogeneous_correct"]
     for i, batch_size in enumerate(batch_sizes):
         batch_data = class_df[class_df["batch_size"] == batch_size]
         if not batch_data.empty:
             class_avg = batch_data.groupby("iteration")["test_accuracy"].mean()
-            ax3.plot(
+            ax.plot(
                 class_avg.index,
                 class_avg.values,
                 "o-",
@@ -191,18 +248,29 @@ def plot_batch_size_comparison(df, save_dir="plots"):
                 label=f"Batch Size {batch_size}",
             )
 
-    ax3.set_xlabel("Iteration")
-    ax3.set_ylabel("Test Accuracy")
-    ax3.set_title("Class Average: Test Accuracy by Batch Size")
-    ax3.legend()
-    ax3.grid(True, alpha=0.3)
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Test Accuracy")
+    ax.set_title(
+        "Class Average: Test Accuracy by Batch Size", fontsize=14, fontweight="bold"
+    )
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(
+        save_dir / "class_average_test_accuracy_comparison.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+    plt.close()
 
     # Plot 4: Class Average - Full Repair Accuracy
+    fig, ax = plt.subplots(figsize=(12, 8))
     for i, batch_size in enumerate(batch_sizes):
         batch_data = class_df[class_df["batch_size"] == batch_size]
         if not batch_data.empty:
             class_avg = batch_data.groupby("iteration")["full_repair_accuracy"].mean()
-            ax4.plot(
+            ax.plot(
                 class_avg.index,
                 class_avg.values,
                 "o-",
@@ -210,24 +278,31 @@ def plot_batch_size_comparison(df, save_dir="plots"):
                 label=f"Batch Size {batch_size}",
             )
 
-    ax4.set_xlabel("Iteration")
-    ax4.set_ylabel("Full Repair Set Accuracy")
-    ax4.set_title("Class Average: Full Repair Set Accuracy by Batch Size")
-    ax4.legend()
-    ax4.grid(True, alpha=0.3)
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Full Repair Set Accuracy")
+    ax.set_title(
+        "Class Average: Full Repair Set Accuracy by Batch Size",
+        fontsize=14,
+        fontweight="bold",
+    )
+    ax.legend()
+    ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(f"{save_dir}/batch_size_comparison.png", dpi=300, bbox_inches="tight")
-    plt.show()
+    plt.savefig(
+        save_dir / "class_average_repair_accuracy_comparison.png",
+        dpi=300,
+        bbox_inches="tight",
+    )
+    plt.close()
 
 
-def plot_repair_time_analysis(df, save_dir="plots"):
-    """Create plots analyzing repair times."""
-    Path(save_dir).mkdir(exist_ok=True)
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+def plot_repair_time_analysis(df, base_dir):
+    """Create individual plots analyzing repair times."""
+    save_dir = base_dir / "stochastic_analysis" / "runtime"
 
     # Plot 1: Repair time by batch size
+    fig, ax = plt.subplots(figsize=(12, 8))
     batch_sizes = sorted(df["batch_size"].unique())
     repair_times_by_batch = []
 
@@ -235,34 +310,78 @@ def plot_repair_time_analysis(df, save_dir="plots"):
         batch_data = df[df["batch_size"] == batch_size]
         repair_times_by_batch.append(batch_data["batch_repair_time"].values)
 
-    ax1.boxplot(repair_times_by_batch, labels=[f"Batch {bs}" for bs in batch_sizes])
-    ax1.set_xlabel("Batch Size")
-    ax1.set_ylabel("Repair Time (seconds)")
-    ax1.set_title("Repair Time Distribution by Batch Size")
-    ax1.grid(True, alpha=0.3)
+    ax.boxplot(repair_times_by_batch, labels=[f"Batch {bs}" for bs in batch_sizes])
+    ax.set_xlabel("Batch Size")
+    ax.set_ylabel("Repair Time (seconds)")
+    ax.set_title(
+        "Repair Time Distribution by Batch Size", fontsize=14, fontweight="bold"
+    )
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(
+        save_dir / "repair_time_distribution_by_batch.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close()
 
     # Plot 2: Repair time over iterations
-    for batch_size in batch_sizes:
+    fig, ax = plt.subplots(figsize=(12, 8))
+    colors = plt.cm.tab10(np.linspace(0, 1, len(batch_sizes)))
+
+    for i, batch_size in enumerate(batch_sizes):
         batch_data = df[df["batch_size"] == batch_size]
         misc_data = batch_data[batch_data["homogeneity"] == "misclassified"]
         if not misc_data.empty:
-            ax2.plot(
+            ax.plot(
                 misc_data["iteration"],
                 misc_data["batch_repair_time"],
                 "o-",
+                color=colors[i],
                 label=f"Batch Size {batch_size}",
                 alpha=0.7,
             )
 
-    ax2.set_xlabel("Iteration")
-    ax2.set_ylabel("Repair Time (seconds)")
-    ax2.set_title("Repair Time Over Iterations (Misclassified)")
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Repair Time (seconds)")
+    ax.set_title(
+        "Repair Time Over Iterations (Misclassified)", fontsize=14, fontweight="bold"
+    )
+    ax.legend()
+    ax.grid(True, alpha=0.3)
 
     plt.tight_layout()
-    plt.savefig(f"{save_dir}/repair_time_analysis.png", dpi=300, bbox_inches="tight")
-    plt.show()
+    plt.savefig(
+        save_dir / "repair_time_over_iterations.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close()
+
+    # Plot 3: Repair time statistics by batch size
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    time_stats = []
+    labels = []
+
+    for batch_size in batch_sizes:
+        batch_data = df[df["batch_size"] == batch_size]
+        mean_time = batch_data["batch_repair_time"].mean()
+        std_time = batch_data["batch_repair_time"].std()
+        time_stats.append((mean_time, std_time))
+        labels.append(f"Batch {batch_size}")
+
+    means = [stats[0] for stats in time_stats]
+    stds = [stats[1] for stats in time_stats]
+
+    ax.bar(labels, means, yerr=stds, capsize=5)
+    ax.set_xlabel("Batch Size")
+    ax.set_ylabel("Repair Time (seconds)")
+    ax.set_title("Average Repair Time by Batch Size", fontsize=14, fontweight="bold")
+    ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(
+        save_dir / "average_repair_time_by_batch.png", dpi=300, bbox_inches="tight"
+    )
+    plt.close()
 
 
 def generate_summary_stats(df):
@@ -316,6 +435,9 @@ def generate_summary_stats(df):
 
 
 def main():
+    # Create organized directory structure
+    base_dir = create_directories()
+
     # Load data
     df = load_and_preprocess_data("results/stochastic_experiment.csv")
 
@@ -323,12 +445,20 @@ def main():
     generate_summary_stats(df)
 
     # Create plots
-    print("\nGenerating plots...")
-    plot_accuracy_over_iterations(df)
-    plot_batch_size_comparison(df)
-    plot_repair_time_analysis(df)
+    print("\nGenerating individual plots...")
 
-    print("Analysis complete! Check the 'plots' directory for generated figures.")
+    print("  - Accuracy over iterations by batch size...")
+    plot_accuracy_over_iterations(df, base_dir)
+
+    print("  - Batch size comparisons...")
+    plot_batch_size_comparisons(df, base_dir)
+
+    print("  - Repair time analysis...")
+    plot_repair_time_analysis(df, base_dir)
+
+    print(
+        f"\nAnalysis complete! Individual plots saved to {base_dir}/stochastic_analysis/ directories."
+    )
 
 
 if __name__ == "__main__":
